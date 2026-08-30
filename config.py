@@ -27,7 +27,7 @@ def validate_environment():
 
 validate_environment()
 
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSION = 1536
 MAX_STEPS = 10
