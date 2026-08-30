@@ -9,5 +9,6 @@ __pycache__/
 venv/
 env/
 *.log
+test_agent.py
 .DS_Store
 Thumbs.db
