@@ -1,0 +1,5 @@
+google-genai
+pinecone
+python-dotenv
+rank-bm25
+rich
