@@ -422,8 +422,6 @@ def main():
             time.sleep(0.8)
 
             answer, tools_used, cached = get_assistant_response(prompt, st.session_state.session_id, ct)
-            if cached and not answer.startswith("ERROR"):
-                answer = "💾 Cached response"
             if answer.startswith("ERROR"):
                 answer = "⚠️ Something went wrong. Please try again or ask a different question."
 
