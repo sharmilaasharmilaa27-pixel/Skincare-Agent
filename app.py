@@ -51,6 +51,7 @@ st.markdown(
         background: linear-gradient(135deg, #818cf8, #c084fc);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         background-clip: text; letter-spacing: -0.5px;
+        filter: drop-shadow(0 0 10px rgba(129,140,248,0.5));
     }
     .sidebar-divider {
         height: 1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,0.3), transparent);
@@ -72,17 +73,22 @@ st.markdown(
         border: 1px solid rgba(99,102,241,0.3); color: #a5b4fc;
         font-size: 13px; font-weight: 600; letter-spacing: 2px; margin-bottom: 1.5rem;
         animation: pulse 2s ease-in-out infinite;
+        filter: drop-shadow(0 0 8px rgba(99,102,241,0.3));
     }
     @keyframes pulse {
         0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.3); }
         50% { box-shadow: 0 0 0 10px rgba(99,102,241,0); }
+    }
+    @keyframes glow {
+        0%, 100% { filter: drop-shadow(0 0 20px rgba(129,140,248,0.4)) drop-shadow(0 0 40px rgba(129,140,248,0.2)); }
+        50% { filter: drop-shadow(0 0 30px rgba(129,140,248,0.6)) drop-shadow(0 0 60px rgba(129,140,248,0.3)); }
     }
     .hero-title {
         font-size: 64px; font-weight: 900; letter-spacing: -3px; margin: 0 0 1rem;
         background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 40%, #e9d5ff 70%, #a5b4fc 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         background-clip: text;
-        animation: textShimmer 3s ease-in-out infinite;
+        animation: textShimmer 3s ease-in-out infinite, glow 3s ease-in-out infinite;
         background-size: 200% auto;
     }
     @keyframes textShimmer {
