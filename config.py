@@ -93,6 +93,7 @@ def pinecone_client():
 def get_gemini_client():
     global _gemini_client
     if _gemini_client is None:
+        validate_environment()
         from google import genai
         _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
     return _gemini_client

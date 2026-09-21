@@ -5,11 +5,8 @@ from google.genai import types
 from config import (
     get_gemini_client,
     GEMINI_MODEL,
-    GEMINI_FALLBACK_MODEL,
     SYSTEM_PROMPT,
     MAX_STEPS,
-    CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-    CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
 )
 
 from tools import (
@@ -82,8 +79,8 @@ def run_agent(
     logger = get_logger(session_id)
     memory = load_memory()
 
-    semantic_cb = CircuitBreaker(failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD, recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT)
-    llm_cb = CircuitBreaker(failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD, recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT)
+    semantic_cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
+    llm_cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
     tool_defs = _build_tool_definitions()
     tool_objects = [types.Tool(function_declarations=tool_defs)]
@@ -112,16 +109,14 @@ def run_agent(
     while step < MAX_STEPS:
         step += 1
         try:
-            response = llm_cb.call(
-                get_gemini_client().models.generate_content,
+            from config import get_gemini_client
+            client = get_gemini_client()
+            response = client.models.generate_content(
                 model=model_used,
                 contents=conversation,
                 config=types.GenerateContentConfig(tools=tool_objects, temperature=0.1, max_output_tokens=800),
             )
         except Exception as e:
-            if model_used != GEMINI_FALLBACK_MODEL:
-                model_used = GEMINI_FALLBACK_MODEL
-                continue
             final_answer = f"ERROR: Failed to call Gemini: {str(e)}"
             break
 
@@ -161,7 +156,6 @@ def run_agent(
             continue
 
     if not final_answer:
-        from resilience import GracefulDegradation
         final_answer = "I could not complete the request. Please try again."
 
     save_memory(memory)
