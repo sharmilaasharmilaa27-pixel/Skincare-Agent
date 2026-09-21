@@ -322,14 +322,18 @@ def get_assistant_response(user_input: str, session_id: str, cost_tracker: CostT
         result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
         cost_tracker.end_call(200, GEMINI_MODEL)
         answer = result.get("final_answer", "I could not generate a response.")
-        set_cached_response(cache_key, answer)
+        if not answer.startswith("ERROR"):
+            set_cached_response(cache_key, answer)
         return answer
     except Exception:
         try:
             cost_tracker.start_call(GEMINI_FALLBACK_MODEL, len(user_input.split()), "chat")
             result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
             cost_tracker.end_call(200, GEMINI_FALLBACK_MODEL)
-            return result.get("final_answer", "I encountered an issue. Please try again.")
+            answer = result.get("final_answer", "I encountered an issue. Please try again.")
+            if not answer.startswith("ERROR"):
+                set_cached_response(cache_key, answer)
+            return answer
         except Exception:
             return "🌙 I'm temporarily unavailable. Please try again later."
 
@@ -424,10 +428,14 @@ def main():
             try:
                 res = run_agent(prompt, session_id=st.session_state.session_id, cost_tracker=ct)
                 tools_used = res.get("tools_used", [])
-                if res.get("cached"):
-                    answer = "💾 **Cached response:** " + answer
+                if res.get("cached") and not answer.startswith("ERROR"):
+                    answer = "💾 Cached response"
+                if answer.startswith("ERROR"):
+                    answer = "⚠️ Something went wrong. Please try again or ask a different question."
             except:
                 pass
+            if answer.startswith("ERROR"):
+                answer = "⚠️ Something went wrong. Please try again or ask a different question."
 
             end_time = time.time()
             response_time = f"{(end_time - start_time)*1000:.0f}ms"

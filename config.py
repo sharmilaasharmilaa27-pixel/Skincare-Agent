@@ -15,7 +15,7 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX", "skincare-agent")
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.0-flash")
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.6-flash")
 GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1536"))
 MAX_STEPS = int(os.getenv("MAX_STEPS", "6"))
