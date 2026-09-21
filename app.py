@@ -306,6 +306,33 @@ def render_tool_chain(tools_used):
     for i, tool in enumerate(tools_used):
         st.markdown(f'<div class="tool-call">Step {i+1}: {tool}()</div>', unsafe_allow_html=True)
 
+def get_assistant_response(user_input: str, session_id: str, cost_tracker: CostTracker) -> str:
+    cache_key = f"{session_id}_{abs(hash(user_input))}"
+    cached = get_cached_response(cache_key)
+    if cached:
+        return cached
+
+    try:
+        check_input(user_input, session_id=session_id)
+    except ValueError as e:
+        return str(e)
+
+    try:
+        cost_tracker.start_call(GEMINI_MODEL, len(user_input.split()), "chat")
+        result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
+        cost_tracker.end_call(200, GEMINI_MODEL)
+        answer = result.get("final_answer", "I could not generate a response.")
+        set_cached_response(cache_key, answer)
+        return answer
+    except Exception:
+        try:
+            cost_tracker.start_call(GEMINI_FALLBACK_MODEL, len(user_input.split()), "chat")
+            result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
+            cost_tracker.end_call(200, GEMINI_FALLBACK_MODEL)
+            return result.get("final_answer", "I encountered an issue. Please try again.")
+        except Exception:
+            return "🌙 I'm temporarily unavailable. Please try again later."
+
 def main():
     if "messages" not in st.session_state or len(st.session_state.messages) == 0:
         render_splash()
