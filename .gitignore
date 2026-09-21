@@ -12,3 +12,9 @@ env/
 test_agent.py
 .DS_Store
 Thumbs.db
+circuit_state.json
+costs.json
+cache/
+eval_results.json
+__pycache__
+*.pyc

@@ -5,9 +5,13 @@ from google.genai import types
 from config import (
     gemini_client,
     GEMINI_MODEL,
+    GEMINI_FALLBACK_MODEL,
     SYSTEM_PROMPT,
     MAX_STEPS,
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
 )
+
 from tools import (
     search_docs,
     lookup_ingredient,
@@ -15,10 +19,12 @@ from tools import (
     escalate,
     build_tool_schemas,
 )
+
 from logger import get_logger
 from guardrails import check_input
 from memory import load_memory, save_memory
-
+from cost_tracker import CostTracker
+from resilience import CircuitBreaker, GracefulDegradation, get_cached_response, set_cached_response
 
 def _build_tool_definitions() -> List[types.FunctionDeclaration]:
     tool_schemas = build_tool_schemas()
@@ -45,7 +51,6 @@ def _build_tool_definitions() -> List[types.FunctionDeclaration]:
         )
     return declarations
 
-
 def _execute_tool(function_name: str, args: Dict[str, Any]) -> str:
     try:
         if function_name == "search_docs":
@@ -58,62 +63,65 @@ def _execute_tool(function_name: str, args: Dict[str, Any]) -> str:
             return escalate(args.get("reason", ""))
         else:
             return f"ERROR: Unknown tool '{function_name}'"
-    except ValueError as e:
-        return f"ERROR: {str(e)}"
     except Exception as e:
         return f"ERROR: {str(e)}"
-
 
 def _parts_to_text(parts) -> str:
     return "".join(p.text for p in parts if p.text)
 
+def run_agent(
+    user_input: str,
+    session_id: str = "default",
+    cost_tracker: CostTracker = None,
+) -> Dict[str, Any]:
+    if cost_tracker is None:
+        cost_tracker = CostTracker(session_id=session_id)
 
-def run_agent(user_input: str, session_id: str = "default") -> Dict[str, Any]:
-    check_input(user_input)
+    check_input(user_input, session_id=session_id)
 
     logger = get_logger(session_id)
     memory = load_memory()
+
+    semantic_cb = CircuitBreaker(failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD, recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT)
+    llm_cb = CircuitBreaker(failure_threshold=CIRCUIT_BREAKER_FAILURE_THRESHOLD, recovery_timeout=CIRCUIT_BREAKER_RECOVERY_TIMEOUT)
+
     tool_defs = _build_tool_definitions()
     tool_objects = [types.Tool(function_declarations=tool_defs)]
 
-    conversation: List[types.Content] = []
-    conversation.append(
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=SYSTEM_PROMPT)],
-        )
-    )
-    conversation.append(
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=user_input)],
-        )
-    )
+    cache_key = f"{session_id}_{abs(hash(user_input))}"
+    cached = get_cached_response(cache_key)
+    if cached:
+        return {
+            "final_answer": cached,
+            "tools_used": [],
+            "steps": 0,
+            "escalated": False,
+            "cached": True,
+        }
 
-    tools_used: List[str] = []
-    step = 0
+    conversation = [
+        types.Content(role="user", parts=[types.Part.from_text(text=SYSTEM_PROMPT)]),
+        types.Content(role="user", parts=[types.Part.from_text(text=user_input)]),
+    ]
+
+    tools_used = []
     final_answer = ""
-
-    logger.log_turn(
-        turn=step,
-        input=user_input,
-        tools_used=[],
-        result="",
-        final_answer="",
-    )
+    step = 0
+    model_used = GEMINI_MODEL
 
     while step < MAX_STEPS:
         step += 1
-
         try:
-            response = gemini_client.models.generate_content(
-                model=GEMINI_MODEL,
+            response = llm_cb.call(
+                gemini_client.models.generate_content,
+                model=model_used,
                 contents=conversation,
-                config=types.GenerateContentConfig(
-                    tools=tool_objects,
-                ),
+                config=types.GenerateContentConfig(tools=tool_objects, temperature=0.1, max_output_tokens=800),
             )
         except Exception as e:
+            if model_used != GEMINI_FALLBACK_MODEL:
+                model_used = GEMINI_FALLBACK_MODEL
+                continue
             final_answer = f"ERROR: Failed to call Gemini: {str(e)}"
             break
 
@@ -135,90 +143,43 @@ def run_agent(user_input: str, session_id: str = "default") -> Dict[str, Any]:
 
         if text_parts and not function_calls:
             final_answer = _parts_to_text(content.parts)
-            conversation.append(
-                types.Content(
-                    role="model",
-                    parts=[types.Part.from_text(text=final_answer)],
-                )
-            )
-            logger.log_turn(
-                turn=step,
-                input=user_input,
-                tools_used=tools_used,
-                result=final_answer,
-                final_answer=final_answer,
-            )
             break
 
         if function_calls:
+            conversation.append(candidate.content)
+            tool_parts = []
             for fc in function_calls:
                 args_dict = dict(fc.args) if fc.args else {}
                 tool_result = _execute_tool(fc.name, args_dict)
                 tools_used.append(fc.name)
-
-                if tool_result.startswith("ERROR"):
-                    conversation.append(
-                        types.Content(
-                            role="tool",
-                            parts=[types.Part.from_text(text=tool_result)],
-                        )
-                    )
-                    final_answer = tool_result
-                    logger.log_turn(
-                        turn=step,
-                        input=user_input,
-                        tools_used=tools_used,
-                        result=tool_result,
-                        final_answer=final_answer,
-                    )
-                    break
-
-                conversation.append(
-                    types.Content(
-                        role="model",
-                        parts=[
-                            types.Part.from_function_response(
-                                name=fc.name,
-                                response={"content": tool_result},
-                            )
-                        ],
+                tool_parts.append(
+                    types.Part.from_function_response(
+                        name=fc.name, response={"result": tool_result}
                     )
                 )
+            conversation.append(types.Content(role="user", parts=tool_parts))
+            continue
 
-            if final_answer and final_answer.startswith("ERROR"):
-                break
+    if not final_answer:
+        from resilience import GracefulDegradation
+        final_answer = "I could not complete the request. Please try again."
 
-        if step == MAX_STEPS:
-            esc = escalate("Maximum steps reached in agent loop.")
-            final_answer = f"I have reached the maximum number of steps. {esc}"
-            conversation.append(
-                types.Content(
-                    role="model",
-                    parts=[types.Part.from_text(text=final_answer)],
-                )
-            )
-            logger.log_turn(
-                turn=step,
-                input=user_input,
-                tools_used=tools_used,
-                result=final_answer,
-                final_answer=final_answer,
-            )
-            break
-
-    memory = save_memory(memory)
+    save_memory(memory)
     logger.save()
+
+    input_tokens = len(user_input.split())
+    output_tokens = len(final_answer.split())
+    cost_tracker.start_call(model_used, input_tokens, "chat")
+    cost_tracker.end_call(output_tokens, model_used)
+
+    if final_answer and not final_answer.startswith("ERROR"):
+        set_cached_response(cache_key, final_answer)
 
     return {
         "final_answer": final_answer,
         "tools_used": tools_used,
         "steps": step,
-        "escalated": final_answer.startswith("ERROR") or "escalat" in final_answer.lower(),
+        "escalated": (final_answer.startswith("ERROR") or "escalat" in final_answer.lower()),
+        "model_used": model_used,
+        "cached": False,
     }
-
-
-if __name__ == "__main__":
-    result = run_agent("What causes acne?")
-    print(f"\nAnswer: {result['final_answer']}")
-    print(f"Tools used: {result['tools_used']}")
-    print(f"Steps: {result['steps']}")

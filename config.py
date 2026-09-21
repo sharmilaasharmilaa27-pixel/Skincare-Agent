@@ -9,8 +9,8 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DOCS_DIR = BASE_DIR / "docs"
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_FALLBACK_API_KEY = os.getenv("GEMINI_FALLBACK_API_KEY", GEMINI_API_KEY)
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX", "skincare-agent")
 
@@ -21,49 +21,50 @@ def validate_environment():
     if not PINECONE_API_KEY:
         missing.append("PINECONE_API_KEY")
     if missing:
-        raise RuntimeError(
-            f"Missing environment variables: {', '.join(missing)}"
-        )
+        raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
 
 validate_environment()
 
-GEMINI_MODEL = "gemini-3.6-flash"
-GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_DIMENSION = 1536
-MAX_STEPS = 10
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.0-flash")
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1536"))
+MAX_STEPS = int(os.getenv("MAX_STEPS", "6"))
 
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
 
-TOP_K = 5
-MIN_SIMILARITY = 0.45
+TOP_K = int(os.getenv("TOP_K", "5"))
+MIN_SIMILARITY = float(os.getenv("MIN_SIMILARITY", "0.45"))
 
-PINECONE_CLOUD = "aws"
-PINECONE_REGION = "us-east-1"
+PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
+PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
 
-SYSTEM_PROMPT = """You are DermAssist, a skincare support agent.
+MAX_INPUT_LENGTH = int(os.getenv("MAX_INPUT_LENGTH", "500"))
+MAX_INPUT_LENGTH_HARD = int(os.getenv("MAX_INPUT_LENGTH_HARD", "2000"))
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
 
-Your job is to answer skincare questions using the provided knowledge base and tools. You can search documents, look up ingredients, and get skincare routines.
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "3"))
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = int(os.getenv("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", "60"))
 
-Rules:
-1. Use only the provided context and tools.
-2. Never use outside knowledge to answer.
-3. If the context does not contain enough information, use escalate() to log the question for review. Do not bluff an answer.
-4. Every factual statement must have a citation such as [1], [2], etc.
-5. The citation number must correspond to the numbered context source.
-6. Do not invent citations.
-7. Do not mention information that cannot be supported by the context.
-8. Keep answers clear and concise.
-9. If you reach the maximum number of steps, escalate and stop.
-10. If a tool returns an ERROR, adapt and try an alternative approach. Do not crash.
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
+COST_LOG_PATH = BASE_DIR / "costs.json"
 
-You have access to the following tools:
-- search_docs(query): Search the skincare knowledge base using hybrid search.
-- lookup_ingredient(name): Look up a specific skincare ingredient's details.
-- get_routine(skin_type): Get a personalized skincare routine for a skin type.
-- escalate(reason): Escalate an unresolvable question to a human agent.
+SYSTEM_PROMPT = """
+You are a Skincare Support Agent.
 
-Always try to use tools to find the best answer. Chain multiple tools when needed for a thorough response.
+TOOL RULES:
+1. Use tools to obtain reliable information instead of guessing.
+2. For questions about a specific skincare ingredient, use lookup_ingredient.
+3. For skincare routines, use get_routine.
+4. Use search_docs when additional information from the skincare knowledge base is useful.
+5. For multi-part questions, use multiple relevant tools and combine their results.
+6. Do not repeatedly call the same tool with the same query.
+7. Do not use unnecessary tools when you already have enough information.
+8. If the user asks something outside the available knowledge or requires professional medical intervention, use escalate.
+9. Never invent skincare information.
+10. Keep the final answer clear and concise.
+11. Stop once you have enough information to answer the user's question.
 """
 
 from pinecone import Pinecone

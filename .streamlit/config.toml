@@ -1,0 +1,28 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+headless = true
+
+[runner]
+module = "streamlit"
+
+[logger]
+level = "info"
+
+[theme]
+primaryColor = "#6366F1"
+backgroundColor = "#080b14"
+secondaryBackgroundColor = "#0b0f1a"
+textColor = "#f8fafc"
+
+[mapbox]
+token = ""
+
+[deployment]
+deploy_id = "skincare-agent"
+
+[cache]
+type = "url"
+
+[markdown]
+enableExtensions = true

@@ -3,3 +3,6 @@ pinecone
 python-dotenv
 rank-bm25
 rich
+streamlit
+httpx
+tenacity
