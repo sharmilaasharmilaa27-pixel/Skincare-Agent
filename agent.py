@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 
 from config import (
-    gemini_client,
+    get_gemini_client,
     GEMINI_MODEL,
     GEMINI_FALLBACK_MODEL,
     SYSTEM_PROMPT,
@@ -113,7 +113,7 @@ def run_agent(
         step += 1
         try:
             response = llm_cb.call(
-                gemini_client.models.generate_content,
+                get_gemini_client().models.generate_content,
                 model=model_used,
                 contents=conversation,
                 config=types.GenerateContentConfig(tools=tool_objects, temperature=0.1, max_output_tokens=800),

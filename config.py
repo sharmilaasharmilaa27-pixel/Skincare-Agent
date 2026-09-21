@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
-from google import genai
 
 load_dotenv()
 
@@ -13,17 +13,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_FALLBACK_API_KEY = os.getenv("GEMINI_FALLBACK_API_KEY", GEMINI_API_KEY)
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX", "skincare-agent")
-
-def validate_environment():
-    missing = []
-    if not GEMINI_API_KEY:
-        missing.append("GEMINI_API_KEY")
-    if not PINECONE_API_KEY:
-        missing.append("PINECONE_API_KEY")
-    if missing:
-        raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
-
-validate_environment()
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.0-flash")
@@ -67,7 +56,50 @@ TOOL RULES:
 11. Stop once you have enough information to answer the user's question.
 """
 
-from pinecone import Pinecone
+_gemini_client: Optional["object"] = None
+_pinecone_client: Optional["object"] = None
 
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
+def validate_environment():
+    missing = []
+    if not GEMINI_API_KEY:
+        missing.append("GEMINI_API_KEY")
+    if not PINECONE_API_KEY:
+        missing.append("PINECONE_API_KEY")
+    if missing:
+        raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
+    return True
+
+def _init_clients():
+    global _gemini_client, _pinecone_client
+    validate_environment()
+    from google import genai
+    from pinecone import Pinecone
+    _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    _pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
+    return _gemini_client, _pinecone_client
+
+@property
+def gemini_client():
+    if _gemini_client is None:
+        _init_clients()
+    return _gemini_client
+
+@property
+def pinecone_client():
+    if _pinecone_client is None:
+        _init_clients()
+    return _pinecone_client
+
+def get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        from google import genai
+        _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    return _gemini_client
+
+def get_pinecone_client():
+    global _pinecone_client
+    if _pinecone_client is None:
+        from pinecone import Pinecone
+        _pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
+    return _pinecone_client

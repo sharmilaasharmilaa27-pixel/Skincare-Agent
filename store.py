@@ -3,7 +3,7 @@ from typing import List, Dict
 from pinecone import ServerlessSpec
 
 from config import (
-    pinecone_client,
+    get_pinecone_client,
     PINECONE_INDEX_NAME,
     EMBEDDING_DIMENSION,
     PINECONE_CLOUD,
@@ -13,12 +13,13 @@ from config import (
 
 
 def get_or_create_index():
-    existing_indexes = pinecone_client.list_indexes()
+    client = get_pinecone_client()
+    existing_indexes = client.list_indexes()
     index_names = [index["name"] for index in existing_indexes]
 
     if PINECONE_INDEX_NAME not in index_names:
         print(f"Creating Pinecone index: {PINECONE_INDEX_NAME}")
-        pinecone_client.create_index(
+        client.create_index(
             name=PINECONE_INDEX_NAME,
             dimension=EMBEDDING_DIMENSION,
             metric="cosine",
@@ -28,7 +29,7 @@ def get_or_create_index():
             ),
         )
 
-    return pinecone_client.Index(PINECONE_INDEX_NAME)
+    return client.Index(PINECONE_INDEX_NAME)
 
 
 def build_vector_id(source: str, chunk_id: int) -> str:

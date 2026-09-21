@@ -3,7 +3,7 @@ from typing import List
 from google.genai import types
 
 from config import (
-    gemini_client,
+    get_gemini_client,
     GEMINI_EMBEDDING_MODEL,
     EMBEDDING_DIMENSION,
 )
@@ -16,7 +16,7 @@ def embed_documents(
     all_embeddings = []
     for start in range(0, len(texts), batch_size):
         batch = texts[start:start + batch_size]
-        response = gemini_client.models.embed_content(
+        response = get_gemini_client().models.embed_content(
             model=GEMINI_EMBEDDING_MODEL,
             contents=batch,
             config=types.EmbedContentConfig(
@@ -37,7 +37,7 @@ def embed_documents(
 
 
 def embed_query(query: str) -> List[float]:
-    response = gemini_client.models.embed_content(
+    response = get_gemini_client().models.embed_content(
         model=GEMINI_EMBEDDING_MODEL,
         contents=[query],
         config=types.EmbedContentConfig(

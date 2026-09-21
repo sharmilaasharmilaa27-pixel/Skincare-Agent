@@ -8,7 +8,7 @@ from pathlib import Path
 
 from config import (
     DOCS_DIR,
-    gemini_client,
+    get_gemini_client,
     GEMINI_EMBEDDING_MODEL,
     EMBEDDING_DIMENSION,
     TOP_K,
