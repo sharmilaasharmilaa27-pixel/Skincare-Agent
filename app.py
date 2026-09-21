@@ -61,7 +61,7 @@ st.markdown(
     #MainMenu, footer, header { visibility: hidden; }
 
     /* ===== SPLASH ANIMATION ===== */
-    .hero-container { text-align: center; padding: 5rem 2rem 2rem; animation: fadeInUp 0.8s ease-out; }
+    .hero-container { text-align: center; padding: 5rem 2rem 2rem; animation: fadeInUp 0.8s ease-out; display: flex; flex-direction: column; align-items: center; justify-content: center; }
     @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(30px); }
         to { opacity: 1; transform: translateY(0); }
@@ -94,13 +94,16 @@ st.markdown(
         animation: fadeInUp 0.8s ease-out 0.3s both;
     }
     .hero-stats {
-        display: flex; justify-content: center; gap: 3rem; margin-top: 2rem;
+        display: flex; justify-content: center; align-items: center; gap: 3rem; margin-top: 2rem;
+        width: 100%; max-width: 600px; margin-left: auto; margin-right: auto;
         animation: fadeInUp 0.8s ease-out 0.6s both;
     }
-    .hero-stat { text-align: center; }
+    .hero-stat { text-align: center; flex: 1; }
     .hero-stat-value { font-size: 32px; font-weight: 800; background: linear-gradient(135deg, #818cf8, #34d399);
-                        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .hero-stat-label { font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+                        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+                        display: block; margin-bottom: 4px; }
+    .hero-stat-label { font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;
+                       display: block; }
 
     /* ===== GLASS CARD ===== */
     .glass-card {
