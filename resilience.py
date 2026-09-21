@@ -1,14 +1,14 @@
 import time
 import functools
 import json
+import os
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Callable, Any
 from enum import Enum
 
-CIRCUIT_BREAKER_STATES = Enum("CircuitBreakerState", "CLOSED OPEN HALF_OPEN")
-
-STATE_FILE = Path(__file__).resolve().parent / "circuit_state.json"
+STATE_FILE = Path(os.path.join(tempfile.gettempdir(), "circuit_state.json"))
 
 class CircuitOpenError(Exception):
     pass
@@ -121,8 +121,13 @@ class GracefulDegradation:
         except (CircuitOpenError, Exception):
             return fallback_lookup(name)
 
+import tempfile
+
+def _get_cache_dir() -> str:
+    return os.path.join(tempfile.gettempdir(), "glowai_cache")
+
 def get_cached_response(cache_key: str) -> Optional[str]:
-    cache_path = Path(__file__).resolve().parent / "cache" / f"{cache_key}.json"
+    cache_path = Path(_get_cache_dir()) / f"{cache_key}.json"
     if cache_path.exists():
         try:
             with open(cache_path) as f:
@@ -134,7 +139,11 @@ def get_cached_response(cache_key: str) -> Optional[str]:
     return None
 
 def set_cached_response(cache_key: str, response: str, ttl_seconds: int = 3600):
-    cache_path = Path(__file__).resolve().parent / "cache"
-    cache_path.mkdir(exist_ok=True)
-    with open(cache_path / f"{cache_key}.json", "w") as f:
-        json.dump({"response": response, "expires_at": (datetime.now() + timedelta(seconds=ttl_seconds)).isoformat()}, f)
+    cache_dir = _get_cache_dir()
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_path = Path(cache_dir) / f"{cache_key}.json"
+    try:
+        with open(cache_path, "w") as f:
+            json.dump({"response": response, "expires_at": (datetime.now() + timedelta(seconds=ttl_seconds)).isoformat()}, f)
+    except Exception:
+        pass

@@ -1,10 +1,15 @@
 import json
+import os
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
 from collections import defaultdict
 
-COST_LOG_PATH = Path(__file__).resolve().parent / "costs.json"
+def _get_data_dir() -> str:
+    return os.environ.get("STREAMLIT_TMP_DIR", tempfile.gettempdir())
+
+COST_LOG_PATH = Path(_get_data_dir()) / "costs.json"
 
 MODEL_PRICING = {
     "gemini-3.6-flash": {"input_per_1k": 0.0001, "output_per_1k": 0.0001, "label": "Gemini Flash (primary)"},
@@ -36,18 +41,21 @@ class CostTracker:
         self._current_category = "chat"
 
     def _load(self):
-        if COST_LOG_PATH.exists():
-            try:
+        try:
+            if COST_LOG_PATH.exists():
                 with open(COST_LOG_PATH) as f:
                     data = json.load(f)
                     if isinstance(data, list):
                         self.records = [CostRecord(**item) for item in data]
-            except Exception:
-                pass
+        except Exception:
+            self.records = []
 
     def _save(self):
-        with open(COST_LOG_PATH, "w") as f:
-            json.dump([r.to_dict() for r in self.records], f, indent=2)
+        try:
+            with open(COST_LOG_PATH, "w") as f:
+                json.dump([r.to_dict() for r in self.records], f, indent=2)
+        except Exception:
+            pass
 
     def start_call(self, model: str, input_tokens_est: int, category: str = "chat"):
         self._current_model = model

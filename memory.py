@@ -1,9 +1,9 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-MEMORY_PATH = BASE_DIR / "memory.json"
+MEMORY_PATH = Path(os.path.join(tempfile.gettempdir(), "memory.json"))
 
 DEFAULT_MEMORY = {
     "user_skin_type": None,
