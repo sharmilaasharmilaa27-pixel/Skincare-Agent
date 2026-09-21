@@ -306,27 +306,28 @@ def render_tool_chain(tools_used):
     for i, tool in enumerate(tools_used):
         st.markdown(f'<div class="tool-call">Step {i+1}: {tool}()</div>', unsafe_allow_html=True)
 
-def get_assistant_response(user_input: str, session_id: str, cost_tracker: CostTracker) -> str:
+def get_assistant_response(user_input: str, session_id: str, cost_tracker: CostTracker) -> tuple:
     cache_key = f"{session_id}_{abs(hash(user_input))}"
     cached = get_cached_response(cache_key)
     if cached:
-        return cached
+        return cached, [], True
 
     try:
         check_input(user_input, session_id=session_id)
     except ValueError as e:
-        return str(e)
+        return str(e), [], False
 
     try:
         cost_tracker.start_call(GEMINI_MODEL, len(user_input.split()), "chat")
         result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
         cost_tracker.end_call(200, GEMINI_MODEL)
         answer = result.get("final_answer", "I could not generate a response.")
+        tools_used = result.get("tools_used", [])
         if not answer.startswith("ERROR"):
             set_cached_response(cache_key, answer)
-        return answer
+        return answer, tools_used, False
     except Exception:
-        return "🌙 I'm temporarily unavailable. Please try again later."
+        return "🌙 I'm temporarily unavailable. Please try again later.", [], False
 
 def main():
     # Validate API keys on startup
@@ -420,15 +421,7 @@ def main():
             placeholder.markdown('<div class="chat-assistant"><div class="chat-label chat-label-assistant">✦ Assistant</div><div class="typing-text">Analyzing <div class="typing-dots"><span></span><span></span><span></span></div></div></div>', unsafe_allow_html=True)
             time.sleep(0.8)
 
-            answer = get_assistant_response(prompt, st.session_state.session_id, ct)
-            tools_used = []
-            cached = False
-            try:
-                res = run_agent(prompt, session_id=st.session_state.session_id, cost_tracker=ct)
-                tools_used = res.get("tools_used", [])
-                cached = res.get("cached", False)
-            except:
-                pass
+            answer, tools_used, cached = get_assistant_response(prompt, st.session_state.session_id, ct)
             if cached and not answer.startswith("ERROR"):
                 answer = "💾 Cached response"
             if answer.startswith("ERROR"):
