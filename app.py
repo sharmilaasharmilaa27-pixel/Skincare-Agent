@@ -2,13 +2,13 @@ import streamlit as st
 import json
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from agent import run_agent
 from guardrails import check_input, BLOCKED_MESSAGE
 from cost_tracker import CostTracker
 from resilience import get_cached_response, set_cached_response
-from config import GEMINI_MODEL, GEMINI_FALLBACK_MODEL
+from config import GEMINI_MODEL, check_api_keys
 
 st.set_page_config(
     page_title="Glow AI ✦ Skincare Agent",
@@ -326,18 +326,15 @@ def get_assistant_response(user_input: str, session_id: str, cost_tracker: CostT
             set_cached_response(cache_key, answer)
         return answer
     except Exception:
-        try:
-            cost_tracker.start_call(GEMINI_FALLBACK_MODEL, len(user_input.split()), "chat")
-            result = run_agent(user_input, session_id=session_id, cost_tracker=cost_tracker)
-            cost_tracker.end_call(200, GEMINI_FALLBACK_MODEL)
-            answer = result.get("final_answer", "I encountered an issue. Please try again.")
-            if not answer.startswith("ERROR"):
-                set_cached_response(cache_key, answer)
-            return answer
-        except Exception:
-            return "🌙 I'm temporarily unavailable. Please try again later."
+        return "🌙 I'm temporarily unavailable. Please try again later."
 
 def main():
+    # Validate API keys on startup
+    ok, msg = check_api_keys()
+    if not ok:
+        st.error(f"🔴 {msg}")
+        st.stop()
+
     if "messages" not in st.session_state or len(st.session_state.messages) == 0:
         render_splash()
 
@@ -425,15 +422,15 @@ def main():
 
             answer = get_assistant_response(prompt, st.session_state.session_id, ct)
             tools_used = []
+            cached = False
             try:
                 res = run_agent(prompt, session_id=st.session_state.session_id, cost_tracker=ct)
                 tools_used = res.get("tools_used", [])
-                if res.get("cached") and not answer.startswith("ERROR"):
-                    answer = "💾 Cached response"
-                if answer.startswith("ERROR"):
-                    answer = "⚠️ Something went wrong. Please try again or ask a different question."
+                cached = res.get("cached", False)
             except:
                 pass
+            if cached and not answer.startswith("ERROR"):
+                answer = "💾 Cached response"
             if answer.startswith("ERROR"):
                 answer = "⚠️ Something went wrong. Please try again or ask a different question."
 

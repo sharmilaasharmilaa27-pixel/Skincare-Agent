@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from dotenv import load_dotenv
 
@@ -59,41 +59,19 @@ TOOL RULES:
 _gemini_client: Optional["object"] = None
 _pinecone_client: Optional["object"] = None
 
-def validate_environment():
+def check_api_keys() -> Tuple[bool, str]:
     missing = []
     if not GEMINI_API_KEY:
         missing.append("GEMINI_API_KEY")
     if not PINECONE_API_KEY:
         missing.append("PINECONE_API_KEY")
     if missing:
-        raise RuntimeError(f"Missing environment variables: {', '.join(missing)}")
-    return True
-
-def _init_clients():
-    global _gemini_client, _pinecone_client
-    validate_environment()
-    from google import genai
-    from pinecone import Pinecone
-    _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    _pinecone_client = Pinecone(api_key=PINECONE_API_KEY)
-    return _gemini_client, _pinecone_client
-
-@property
-def gemini_client():
-    if _gemini_client is None:
-        _init_clients()
-    return _gemini_client
-
-@property
-def pinecone_client():
-    if _pinecone_client is None:
-        _init_clients()
-    return _pinecone_client
+        return False, f"Missing environment variables: {', '.join(missing)}. Set them in Streamlit Cloud Settings > Environment Variables."
+    return True, "All API keys configured."
 
 def get_gemini_client():
     global _gemini_client
     if _gemini_client is None:
-        validate_environment()
         from google import genai
         _gemini_client = genai.Client(api_key=GEMINI_API_KEY)
     return _gemini_client

@@ -7,6 +7,7 @@ from config import (
     GEMINI_MODEL,
     SYSTEM_PROMPT,
     MAX_STEPS,
+    GEMINI_API_KEY,
 )
 
 from tools import (
@@ -21,7 +22,7 @@ from logger import get_logger
 from guardrails import check_input
 from memory import load_memory, save_memory
 from cost_tracker import CostTracker
-from resilience import CircuitBreaker, GracefulDegradation, get_cached_response, set_cached_response
+from resilience import get_cached_response, set_cached_response
 
 def _build_tool_definitions() -> List[types.FunctionDeclaration]:
     tool_schemas = build_tool_schemas()
@@ -79,9 +80,6 @@ def run_agent(
     logger = get_logger(session_id)
     memory = load_memory()
 
-    semantic_cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
-    llm_cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
-
     tool_defs = _build_tool_definitions()
     tool_objects = [types.Tool(function_declarations=tool_defs)]
 
@@ -106,54 +104,57 @@ def run_agent(
     step = 0
     model_used = GEMINI_MODEL
 
-    while step < MAX_STEPS:
-        step += 1
-        try:
-            from config import get_gemini_client
-            client = get_gemini_client()
-            response = client.models.generate_content(
-                model=model_used,
-                contents=conversation,
-                config=types.GenerateContentConfig(tools=tool_objects, temperature=0.1, max_output_tokens=800),
-            )
-        except Exception as e:
-            final_answer = f"ERROR: Failed to call Gemini: {str(e)}"
-            break
-
-        if not response.candidates:
-            final_answer = "I'm sorry, I couldn't generate a response."
-            break
-
-        candidate = response.candidates[0]
-        content = candidate.content
-
-        function_calls = []
-        text_parts = []
-
-        for part in content.parts:
-            if part.function_call:
-                function_calls.append(part.function_call)
-            if part.text:
-                text_parts.append(part.text)
-
-        if text_parts and not function_calls:
-            final_answer = _parts_to_text(content.parts)
-            break
-
-        if function_calls:
-            conversation.append(candidate.content)
-            tool_parts = []
-            for fc in function_calls:
-                args_dict = dict(fc.args) if fc.args else {}
-                tool_result = _execute_tool(fc.name, args_dict)
-                tools_used.append(fc.name)
-                tool_parts.append(
-                    types.Part.from_function_response(
-                        name=fc.name, response={"result": tool_result}
-                    )
+    try:
+        client = get_gemini_client()
+        while step < MAX_STEPS:
+            step += 1
+            try:
+                response = client.models.generate_content(
+                    model=model_used,
+                    contents=conversation,
+                    config=types.GenerateContentConfig(tools=tool_objects, temperature=0.1, max_output_tokens=800),
                 )
-            conversation.append(types.Content(role="user", parts=tool_parts))
-            continue
+            except Exception as e:
+                final_answer = f"ERROR: Failed to call Gemini: {str(e)}"
+                break
+
+            if not response.candidates:
+                final_answer = "I'm sorry, I couldn't generate a response."
+                break
+
+            candidate = response.candidates[0]
+            content = candidate.content
+
+            function_calls = []
+            text_parts = []
+
+            for part in content.parts:
+                if part.function_call:
+                    function_calls.append(part.function_call)
+                if part.text:
+                    text_parts.append(part.text)
+
+            if text_parts and not function_calls:
+                final_answer = _parts_to_text(content.parts)
+                break
+
+            if function_calls:
+                conversation.append(candidate.content)
+                tool_parts = []
+                for fc in function_calls:
+                    args_dict = dict(fc.args) if fc.args else {}
+                    tool_result = _execute_tool(fc.name, args_dict)
+                    tools_used.append(fc.name)
+                    tool_parts.append(
+                        types.Part.from_function_response(
+                            name=fc.name, response={"result": tool_result}
+                        )
+                    )
+                conversation.append(types.Content(role="user", parts=tool_parts))
+                continue
+
+    except Exception as e:
+        final_answer = f"ERROR: Unable to connect to AI service. Please check your API key and try again."
 
     if not final_answer:
         final_answer = "I could not complete the request. Please try again."
