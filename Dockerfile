@@ -7,11 +7,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN python generate_evals.py
-
 ENV GEMINI_API_KEY=${GEMINI_API_KEY}
 ENV PINECONE_API_KEY=${PINECONE_API_KEY}
 ENV PINECONE_INDEX=${PINECONE_INDEX:-skincare-agent}
+ENV GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.6-flash}
+ENV GEMINI_FALLBACK_MODEL=${GEMINI_FALLBACK_MODEL:-gemini-2.0-flash}
 
 EXPOSE 8501
 
